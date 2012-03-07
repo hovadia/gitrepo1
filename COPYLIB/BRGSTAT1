@@ -1,0 +1,29 @@
+      *--------------------------------------------
+      *     Bridge Statistics file
+      *     Record Length:  200 Bytes
+      *--------------------------------------------
+       01  ':T:'-RECORD.
+           05 ':T:'-KEY.
+              10 ':T:'-SCRIPT-ID          PIC X(04).
+              10 ':T:'-DATE.                                            00030001
+                 15 ':T:'-DATE-YYYY       PIC 9(04).                    00041001
+                 15 ':T:'-DATE-MM         PIC 9(02).                    00042001
+                 15 ':T:'-DATE-DD         PIC 9(02).                    00043001
+              10 ':T:'-HOUR               PIC 9(02).                    00044001
+              10 ':T:'-MINUTES            PIC 9(02).                    00044001
+              10 ':T:'-SECONDS            PIC 9(02).                    00044001
+              10 ':T:'-FILLER-1           PIC X(02).                    00044001
+           05 ':T:'-DATE-FIELDS.
+              10 ':T:'-RECORDS-IN-SCRIPT  PIC 9(03).
+              10 ':T:'-RECORDS-PROCESSED  PIC 9(03).
+              10 ':T:'-SCRIPT-IND         PIC X(01).
+                  88 ':T:'-SCRIPT-ERROR     VALUE 'E'.
+              10 ':T:'-SCRIPT-SEQ-ERROR   PIC 9(03).
+              10 ':T:'-ERROR-CODE         PIC X(04).
+              10 ':T:'-ABSTIME-ELAPSED    PIC 9(15).
+           05 ':T:'-LOG-DATA.
+              10 ':T:'-REGION             PIC X(08).
+              10 ':T:'-USERID             PIC X(08).
+              10 ':T:'-EIBTRMID           PIC X(04).
+           05 ':T:'-MESSAGE-1             PIC X(100).
+           05 ':T:'-FILLER-2              PIC X(31).

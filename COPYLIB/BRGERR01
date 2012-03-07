@@ -1,0 +1,27 @@
+      *--------------------------------------------
+      *     Bridge ERROR statistics file
+      *     Record Length: 200 bytes
+      *--------------------------------------------
+       01  ':T:'-RECORD.                                                00010001
+           05 ':T:'-KEY.                                                00020001
+              10 ':T:'-DATE.                                            00030001
+                 15 ':T:'-DATE-YYYY     PIC X(04).                      00041001
+                 15 ':T:'-DATE-MM       PIC X(02).                      00042001
+                 15 ':T:'-DATE-DD       PIC X(02).                      00043001
+              10 ':T:'-HOUR             PIC X(02).                      00044001
+              10 ':T:'-ERROR-CATEGORY   PIC X(05).                      00045001
+              10 ':T:'-ERROR-CODE       PIC X(05).                      00046001
+           05 ':T:'-ERROR-CODE-CNT      PIC 9(09) COMP-3.               00050001
+           05 ':T:'-ERROR-PROGRAM       PIC X(08).                      00051001
+           05 ':T:'-FIRST-LOG.
+              10 ':T:'-FIRST-REGION     PIC X(08).
+              10 ':T:'-FIRST-USERID     PIC X(08).
+              10 ':T:'-FIRST-EIBTRMID   PIC X(04).
+              10 ':T:'-FIRST-EIBTIME    PIC S9(7) COMP-3.
+           05 ':T:'-LAST-LOG.
+              10 ':T:'-LAST-REGION      PIC X(08).
+              10 ':T:'-LAST-USERID      PIC X(08).
+              10 ':T:'-LAST-EIBTRMID    PIC X(04).
+              10 ':T:'-LAST-EIBTIME     PIC S9(7) COMP-3.
+           05 ':T:'-MESSAGE-1           PIC X(100).                     00270001
+           05 ':T:'-FILLER-1            PIC X(19).                      00270001

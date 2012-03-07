@@ -1,0 +1,47 @@
+       01  ':T:'-SCRIPT-RECORD.
+           05 ':T:'-SCRIPT-KEY.
+              10 ':T:'-SCRIPT-ID   PIC X(04).
+              10 ':T:'-SCRIPT-SEQ  PIC 9(03).
+           05 ':T:'-SCRIPT-1ST-CHAR    PIC X(01).
+              88 ':T:'-VALID-1ST-CHAR          VALUE 'D' 'I' 'U'
+                         'Q' 'C' 'R' 'A' 'T' 'E' 'X'.
+              88 ':T:'-FUNCTION-DELETE         VALUE 'D'.
+              88 ':T:'-FUNCTION-INSERT         VALUE 'I'.
+              88 ':T:'-FUNCTION-UPDATE         VALUE 'U'.
+              88 ':T:'-FUNCTION-READ           VALUE 'Q'.
+              88 ':T:'-FUNCTION-COMMIT         VALUE 'C'.
+              88 ':T:'-FUNCTION-ROLLBACK       VALUE 'R'.
+              88 ':T:'-FUNCTION-ABEND          VALUE 'A'.
+              88 ':T:'-FUNCTION-TERMINATE      VALUE 'T'.
+              88 ':T:'-FUNCTION-NOT-VALID      VALUE 'X'.
+              88 ':T:'-FUNCTION-ERROR-HANDLING VALUE 'E'.
+           05 ':T:'-SCRIPT-2ND-CHAR    PIC X(01).
+              88 ':T:'-VALID-2ND-CHAR             VALUE 'P' 'H' 'V'
+                                  '1' '2' '3' '4' '5' '6' 'E'.
+              88 ':T:'-PATIENT-ALL                VALUE 'P'
+                                 '1' '2' '3' '4' '5' '6'.
+              88 ':T:'-PATIENT                    VALUE 'P'.
+              88 ':T:'-PHARMACY                   VALUE 'H'.
+              88 ':T:'-VSAM                       VALUE 'V'.
+              88 ':T:'-ONSERVER                   VALUE '1'.
+              88 ':T:'-ONREGION                   VALUE '2'.
+              88 ':T:'-ONSERVER-TO-ONREGION       VALUE '3'.
+              88 ':T:'-ONSERVER-TO-ONMEMBER       VALUE '4'.
+              88 ':T:'-ONREGION-TO-ONMEMBER       VALUE '5'.
+              88 ':T:'-ONREGION-TO-ONREGION       VALUE '6'.
+           05 ':T:'-KEY              PIC X(04).
+           05 ':T:'-NAME             PIC X(10).
+           05 ':T:'-CITY             PIC X(10).
+           05 ':T:'-STATE            PIC X(02).
+           05 ':T:'-DOB.
+              15 ':T:'-DOB-CC         PIC X(02).
+              15 ':T:'-DOB-YY         PIC X(02).
+              15 ':T:'-DOB-MM         PIC X(02).
+              15 ':T:'-DOB-DD         PIC X(02).
+           05 ':T:'-GENDER            PIC X(01).
+              88 ':T:'-MALE               VALUE 'M'.
+              88 ':T:'-FEMALE             VALUE 'F'.
+           05 ':T:'-DATA             PIC X(155).
+           05 ':T:'-SCRIPT-STATUS      PIC X(01).
+              88 ':T:'-SCRIPT-OK               VALUE SPACES.
+              88 ':T:'-SCRIPT-ERROR            VALUE 'E'.

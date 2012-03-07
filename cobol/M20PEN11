@@ -1,0 +1,2459 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID.    M20PEN11.
+      *--------------------------------------------------------------*
+      *                                                              *
+      *  This program is a copy of M20PEA00 the main program that    *
+      *  control all testing on the GEMFIRE.                         *
+      *                                                              *
+      *  MODIFICATION LOG                                            *
+      *                                                              *
+      *  MM/DD/YY   USERID    CHANGE DESCRIPTION                     *
+      *  ~~~~~~~~   ~~~~~~~~  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   *
+      *  08/01/11   P07319    NEW PROG                               *
+      *                                                              *
+      *  09/01/11   P07319    Add the error handling logic           *
+      *                                                              *
+      *  12/21/11   P07319    Copy M20PEA00                          *
+      *                                                              *
+      *                                                              *
+      *--------------------------------------------------------------*
+       ENVIRONMENT DIVISION.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  FILLER                    PIC X(50) VALUE
+           '**** M20PEN11 WORKING STORAGE STARTS HERE ****'.
+
+       01  WS-MISC-FIELDS.
+           05 WS-PROGRAM-ID          PIC X(08) VALUE 'M20PEN11'.
+           05 WS-PREFIX-MSG          PIC X(05) VALUE 'N11; '.
+           05 WS-JAVA-BRIDGE         PIC X(08) VALUE 'M20EMCJB'.
+           05 WS-COBOL-BRIDGE        PIC X(08) VALUE 'M20PED00'.
+           05 WS-TRANS-STATUS        PIC X(05).
+           05 I                      PIC 9(02).
+           05 J                      PIC 9(02).
+           05 SUB                    PIC 9(02).
+           05 SUB1                   PIC S9(4) COMP.
+           05 SUB2                   PIC S9(4) COMP.
+           05 WS-SCREEN-MSG          PIC X(79) VALUE SPACES.
+           05 WS-CONSOLE-MSG         PIC X(80) VALUE SPACES.
+           05 WS-MESSAGE             PIC X(30) VALUE ' '.
+           05 WS-B1-LENGTH           PIC S9(04) COMP VALUE +80.
+           05 WS-B1-IND              PIC X(01).
+              88 B1-INVALID-DATA              VALUE 'Y'.
+           05 WS-TERMINATE-TASK      PIC X(01).
+
+       01  WS-CICS-FIELDS.
+           05 WS-RESP                PIC S9(08) VALUE +0.
+           05 WS-RESP-NUM            PIC 9(04).
+           05 WS-TASKN               PIC 9(07).
+           05 WS-REGION              PIC X(08).
+           05 WS-SYSID               PIC X(04).
+           05 WS-USERID              PIC X(08).
+           05 WS-UOW                 PIC X(08).
+
+       01  WS-DATE-FIELDS.
+           05 WS-DATE-TIME.
+              10 WS-TIME-HHMMSS      PIC X(08).
+              10 WS-MMDDYYYY         PIC X(10).
+              10 FILLER REDEFINES WS-MMDDYYYY.
+                 15 WS-MM            PIC X(02).
+                 15 WS-SLASH-1       PIC X(01).
+                 15 WS-DD            PIC X(02).
+                 15 WS-SLASH-2       PIC X(01).
+                 15 WS-YYYY          PIC X(04).
+              10 WS-MMDDYY-NUM       pic 9(06).
+           05 WS-ABSTIME             PIC S9(15) VALUE +0 COMP-3.
+
+      *--------------------------------------------
+      *     Bridge Script record
+      *--------------------------------------------
+       COPY BRGSCRP1 REPLACING ':T:' BY B1.
+
+       01  CHANNEL-AND-CONTAINERS.
+           05 WS-TOKEN                  PIC S9(8) COMP.
+           05 CONT-LENGTH               PIC S9(8) COMP.
+           05 BRG1-ERROR-CONT-LENGTH    PIC S9(8) COMP.
+           05 JBRIDGE-CH-NAME           PIC X(16) VALUE 'JBRIDGE'.
+           05 FUNCTION-CONT-NAME        PIC X(16) VALUE 'FUNCTION'.
+           05 REQUEST-CONT-NAME         PIC X(16) VALUE 'REQUEST'.
+           05 RESPONSE-CONT-NAME        PIC X(16) VALUE 'RESPONSE'.
+           05 BRG1-ERROR-CONT-NAME      PIC X(16) VALUE
+                             'BRIDGE-ERROR'.
+           05 TRANSACTION-CONT-NAME     PIC X(16) VALUE 'TRANSACTION'.
+           05 BROWSE-CONT-NAME          PIC X(16) VALUE SPACE.
+
+       01  FUNCTION-CONT-DATA      PIC X(50) VALUE SPACES.
+       01  REQUEST-CONT-DATA       PIC X(500).
+       01  RESPONSE-CONT-DATA      PIC X(500).
+
+       COPY BRGERCON REPLACING ':T:' BY BRG1.
+
+       COPY BRGCQ01.
+
+       COPY BRGCQ02.
+
+       COPY BRGCQ03.
+
+       COPY BRGCQ04.
+
+       COPY BRGCR01.
+
+       COPY BRGCR02.
+
+      *--------------------------------------------
+      *     Convert text to Hex
+      *--------------------------------------------
+       01  WS-CONVERT-FIELDS.
+           05 WS-TEXT-LENGTH     PIC S9(04)  VALUE ZERO COMP.
+           05 WS-QUOTIENT        PIC S9(04)  VALUE ZERO COMP.
+           05 WS-REMAINDER       PIC S9(04)  VALUE ZERO COMP.
+           05 WS-TXT-SUB         PIC S9(04)  VALUE ZERO COMP.
+           05 WS-CONV-BYTE-NUM.
+              10 FILLER          PIC  X(01)  VALUE LOW-VALUES.
+              10 WS-CONV-BYTE    PIC  X(01).
+           05  WS-CONV-NUM  REDEFINES WS-CONV-BYTE-NUM PIC 9(4) COMP.
+           05  WS-CONV-ZONE      PIC  X(10) VALUE SPACE.
+           05  WS-CONV-DIGT      PIC  X(10) VALUE SPACE.
+           05  WS-HEX-CHARACTERS PIC  X(16)  VALUE '0123456789ABCDEF'.
+           05  FILLER REDEFINES WS-HEX-CHARACTERS.
+               10  WS-HEX-CHAR   PIC  X(01)  OCCURS 16 TIMES.
+           05  WS-CONVERTED-TEXT PIC  X(50) VALUE SPACE.
+
+      *--------------------------------------------
+      *     Bridge VSAM multi purpose file
+      *--------------------------------------------
+       01  BRIDGE-VSAM-RECORD.
+           05 BRIDGE-KEY.
+              10 V1-KEY-1          PIC X(04).
+              10 V1-KEY-FILLER     PIC X(06).
+           05 BRIDGE-DATA.
+              10 V1-NAME           PIC X(10).
+              10 V1-CITY           PIC X(10).
+              10 VI-STATE          PIC X(02).
+              10 V1-DOB.
+                 15 V1-DOB-CC            PIC X(02).
+                 15 V1-DOB-YY            PIC X(02).
+                 15 V1-DOB-MM            PIC X(02).
+                 15 V1-DOB-DD            PIC X(02).
+              10 V1-GENDER               PIC X(01).
+              10 V1-INS-LOG.
+                 15 V1-INS-REGION        PIC X(08).
+                 15 V1-INS-USERID        PIC X(08).
+                 15 V1-INS-EIBTRMID      PIC X(04).
+                 15 V1-INS-EIBDATE       PIC S9(7) COMP-3.
+                 15 V1-INS-EIBTIME       PIC S9(7) COMP-3.
+              10 V1-MOD-LOG.
+                 15 V1-MOD-REGION        PIC X(08).
+                 15 V1-MOD-USERID        PIC X(08).
+                 15 V1-MOD-EIBTRMID      PIC X(04).
+                 15 V1-MOD-EIBDATE       PIC S9(7) COMP-3.
+                 15 V1-MOD-EIBTIME       PIC S9(7) COMP-3.
+              10 FILLER-1                PIC X(03).
+
+      *---------------------------------------------------
+      *     Container created by M20PED00 (cobol bridge)
+      *     to pass UOWID to the JAVA program
+      *---------------------------------------------------
+       01  TRANSACTION-CONT-DATA.
+           10  WSC-UOWID              PIC  X(027) VALUE SPACE.
+           10  WSC-READ-WRITE         PIC  X.
+               88  WSC-NONE           VALUE  '0'.
+               88  WSC-READ           VALUE  '1'.
+               88  WSC-WRITE          VALUE  '2'.
+
+      *----------------------------------------------------
+      *     commarea link to M20EMCJC (Commit & rollback)
+      *     Not through the TRUE program
+      *----------------------------------------------------
+
+       01  M20EMCJC-COMMAREA.
+           05 M20EMCJC-ACTION               PIC X.
+              88 M20EMCJC-ACTION-COMMIT         VALUE '0'.
+              88 M20EMCJC-ACTION-ROLLBACK       VALUE '1'.
+              88 M20EMCJC-ACTION-TERMINATE      VALUE '2'.
+           05 M20EMCJC-UOWID.
+              10 M20EMCJC-SYSTEM-ID         PIC X(4).
+              10 M20EMCJC-APPLICATION-ID    PIC X(8).
+              10 M20EMCJC-TASK-NUMBER       PIC X(7).
+              10 M20EMCJC-TNB-FILLER        PIC X(8).
+           05 M20EMCJC-RESPONSE-STATUS      PIC X(4).
+              88 M20EMCJC-RESP-SUCCESS          VALUE '0000'.
+              88 M20EMCJC-RESP-INVALID-UOWID    VALUE '0001'.
+              88 M20EMCJC-RESP-INVALID-ACTION   VALUE '0002'.
+              88 M20EMCJC-RESP-SYSTEM-ERROR     VALUE '0003'.
+              88 M20EMCJC-RESP-CONTAINER-ERROR  VALUE '0004'.
+
+       COPY MEDIWTO.
+
+       01  FILLER                       PIC X(50) VALUE
+           '**** M20PEN11 WORKING STORAGE ENDS HERE ****'.
+
+      *=====================================================
+       LINKAGE SECTION.
+      *=====================================================
+       01  DFHCOMMAREA      PIC X(200).
+
+       PROCEDURE DIVISION USING DFHEIBLK DFHCOMMAREA.
+      *=====================================================
+       0000-MAINLINE.
+      *=====================================================
+
+      *-----------------------------------------------
+      *    VALIDATE COMMAREA IF NOT VALID RETURN
+      *-----------------------------------------------
+
+           IF EIBCALEN = LENGTH OF DFHCOMMAREA
+              MOVE DFHCOMMAREA  TO  B1-SCRIPT-RECORD                    00055200
+           ELSE
+              STRING
+                 WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Invalid commarea length'
+                 DELIMITED BY SIZE
+                               INTO MWTO-MSG-TEXT1
+              END-STRING
+              PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+              SET B1-SCRIPT-ERROR  TO  TRUE
+              GO TO 9999-RETURN-TO-CICS
+           END-IF
+
+      *------------------------------------------------------
+      *    perform function
+      *------------------------------------------------------
+
+           MOVE SPACES   TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+           EVALUATE TRUE
+             WHEN B1-FUNCTION-DELETE
+               PERFORM 2000-PROCESS-DELETE THRU 2000-EXIT
+
+             WHEN B1-FUNCTION-INSERT
+               PERFORM 3000-PROCESS-INSERT THRU 3000-EXIT
+
+             WHEN B1-FUNCTION-UPDATE
+               PERFORM 4000-PROCESS-UPDATE THRU 4000-EXIT
+
+             WHEN B1-FUNCTION-READ
+               PERFORM 5000-PROCESS-READ THRU 5000-EXIT
+
+             WHEN B1-FUNCTION-ERROR-HANDLING
+               PERFORM 7000-PROCESS-ERROR-HANDLING THRU 7000-EXIT
+
+             WHEN B1-FUNCTION-NOT-VALID
+               PERFORM 7500-PROCESS-FUNC-NOT-VALID THRU 7500-EXIT
+
+             WHEN B1-FUNCTION-COMMIT AND
+                   B1-SCRIPT-2ND-CHAR = 'E'
+               PERFORM 6100-PROCESS-EXPLICIT-COMMIT THRU 6100-EXIT
+
+             WHEN B1-FUNCTION-COMMIT
+               INITIALIZE M20EMCJC-COMMAREA
+               SET M20EMCJC-ACTION-COMMIT TO TRUE
+               PERFORM 6400-LINK-TO-JAVA-PROGRAM THRU 6400-EXIT
+
+             WHEN B1-FUNCTION-ROLLBACK AND
+                   B1-SCRIPT-2ND-CHAR = 'E'
+               PERFORM 6200-PROCESS-EXPLICIT-ROLLBACK THRU 6200-EXIT
+
+             WHEN B1-FUNCTION-ROLLBACK
+               INITIALIZE M20EMCJC-COMMAREA
+               SET M20EMCJC-ACTION-ROLLBACK TO TRUE
+               PERFORM 6400-LINK-TO-JAVA-PROGRAM THRU 6400-EXIT
+
+             WHEN B1-FUNCTION-TERMINATE
+               INITIALIZE M20EMCJC-COMMAREA
+               SET M20EMCJC-ACTION-TERMINATE TO TRUE
+               PERFORM 6400-LINK-TO-JAVA-PROGRAM THRU 6400-EXIT
+
+             WHEN B1-FUNCTION-ABEND
+               PERFORM 6300-PROCESS-ABEND THRU 6300-EXIT
+
+             WHEN OTHER
+              STRING
+                 WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Invalid first char '
+                 DELIMITED BY SIZE
+                 B1-SCRIPT-1ST-CHAR DELIMITED BY SIZE
+                 ' In script ' DELIMITED BY SIZE
+                 B1-SCRIPT-KEY DELIMITED BY SIZE
+                 ' Valid codes: I,D,Q,U,C,R,A,T,E'
+                 DELIMITED BY SIZE
+                               INTO MWTO-MSG-TEXT1
+              END-STRING
+              PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+              SET B1-SCRIPT-ERROR  TO  TRUE
+              GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           GO TO 9999-RETURN-TO-CICS
+           .
+       0000-EXIT.
+            EXIT.
+
+      *=====================================================
+       2000-PROCESS-DELETE.
+      *=====================================================
+
+           EVALUATE TRUE
+             WHEN B1-PATIENT-ALL
+               PERFORM 2100-PROCESS-DELETE-PATIENT THRU 2100-EXIT
+
+             WHEN B1-PHARMACY
+               PERFORM 2200-PROCESS-DELETE-PHARMACY THRU 2200-EXIT
+
+             WHEN B1-VSAM
+               PERFORM 2300-PROCESS-DELETE-VSAM THRU 2300-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Invalid resource code ' DELIMITED BY SIZE
+                  B1-SCRIPT-2ND-CHAR DELIMITED BY SIZE
+                  ' in script: ' DELIMITED BY SIZE
+                  B1-SCRIPT-KEY DELIMITED BY SIZE
+                  ' record not deleted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       2000-EXIT.
+            EXIT.
+
+      *=====================================================
+       2100-PROCESS-DELETE-PATIENT.
+      *=====================================================
+
+           EVALUATE TRUE
+              WHEN B1-PATIENT
+                MOVE 'DELETE-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER
+                MOVE 'DELETE-PATIENT-ONSERVER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION
+                MOVE 'DELETE-PATIENT-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONREGION
+                MOVE 'DELETE-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONMEMBER
+                MOVE 'DELETE-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONMEMBER
+                MOVE 'DELETE-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONREGION
+                MOVE 'DELETE-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+           END-EVALUATE
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PATIENT-READ-REQUEST
+           MOVE B1-KEY  TO BRG-Q01-PATIENT-ID
+           MOVE BRIDGE-PATIENT-READ-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PATIENT-READ-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PATIENT-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA TO BRIDGE-PATIENT-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R01-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from Patient, RC: ' DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q01-PATIENT-ID DELIMITED BY SIZE
+                  ' record deleted ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R01-RESP-KEY-NOTFND
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from Patient, RC: ' DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q01-PATIENT-ID DELIMITED BY SIZE
+                  ' record not found ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from Patient, RC: ' DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q01-PATIENT-ID DELIMITED BY SIZE
+                  ' record not deleted ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-EVALUATE
+
+           .
+       2100-EXIT.
+            EXIT.
+
+      *=====================================================
+       2200-PROCESS-DELETE-PHARMACY.
+      *=====================================================
+
+           MOVE 'DELETE-PHARMACY' TO FUNCTION-CONT-DATA
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+           INITIALIZE BRIDGE-PHARMACY-READ-REQUEST
+           MOVE B1-KEY TO BRG-Q03-PHARMACY-ID
+           MOVE BRIDGE-PHARMACY-READ-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PHARMACY-READ-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PHARMACY-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA to BRIDGE-PHARMACY-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R02-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from Pharmacy, RC: ' DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q03-PHARMACY-ID DELIMITED BY SIZE
+                  ' record deleted ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R02-RESP-KEY-NOTFND
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from Pharmacy, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q03-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not found ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from Pharmacy, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q03-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not deleted ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-EVALUATE
+
+           .
+       2200-EXIT.
+            EXIT.
+
+      *=====================================================
+       2300-PROCESS-DELETE-VSAM.
+      *=====================================================
+
+           INITIALIZE BRIDGE-VSAM-RECORD
+           MOVE B1-KEY TO V1-KEY-1
+
+           EXEC CICS DELETE
+                DATASET   ('BRIDGEF1')
+                RIDFLD    (BRIDGE-KEY)
+                KEYLENGTH (LENGTH OF BRIDGE-KEY)
+                RESP      (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record deleted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(NOTFND)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' Key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not found' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'DELETE from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not deleted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           .
+       2300-EXIT.
+            EXIT.
+
+      *=====================================================
+       3000-PROCESS-INSERT.
+      *=====================================================
+
+           EVALUATE TRUE
+             WHEN B1-PATIENT-ALL
+               PERFORM 3100-PROCESS-INSERT-PATIENT THRU 3100-EXIT
+
+             WHEN B1-PHARMACY
+               PERFORM 3200-PROCESS-INSERT-PHARMACY THRU 3200-EXIT
+
+             WHEN B1-VSAM
+               PERFORM 3300-PROCESS-INSERT-VSAM THRU 3300-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Invalid resource code ' DELIMITED BY SIZE
+                  B1-SCRIPT-2ND-CHAR DELIMITED BY SIZE
+                  ' in script: ' DELIMITED BY SIZE
+                  B1-SCRIPT-KEY DELIMITED BY SIZE
+                  ' record not inserted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           .
+       3000-EXIT.
+            EXIT.
+
+      *=====================================================
+       3100-PROCESS-INSERT-PATIENT.
+      *=====================================================
+
+           EVALUATE TRUE
+              WHEN B1-PATIENT
+                MOVE 'INSERT-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER
+                MOVE 'INSERT-PATIENT-ONSERVER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION
+                MOVE 'INSERT-PATIENT-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONREGION
+                MOVE 'SAVE-PATIENT-ONSERVER-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONMEMBER
+                MOVE 'SAVE-PATIENT-ONSERVER-ONMEMBER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONMEMBER
+                MOVE 'SAVE-PATIENT-ONREGION-ONMEMBER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONREGION
+                MOVE 'SAVE-PATIENT-ONREGION-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+           END-EVALUATE
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PATIENT-SAVE-REQUEST
+           MOVE B1-KEY          TO BRG-Q02-PATIENT-ID
+           MOVE B1-NAME         TO BRG-Q02-NAME
+           MOVE B1-CITY         TO BRG-Q02-CITY
+           MOVE B1-STATE        TO BRG-Q02-STATE
+           MOVE B1-DOB          TO BRG-Q02-DOB
+           MOVE B1-GENDER       TO BRG-Q02-GENDER
+           MOVE BRIDGE-PATIENT-SAVE-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PATIENT-SAVE-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PATIENT-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA TO BRIDGE-PATIENT-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R01-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'INSERT to Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q02-PATIENT-ID DELIMITED BY SIZE
+                  ' record inserted ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R01-RESP-RECORD-EXIST
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'INSERT to Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q02-PATIENT-ID DELIMITED BY SIZE
+                  ' record already exist' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'INSERT to Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q02-PATIENT-ID DELIMITED BY SIZE
+                  ' record not inserted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       3100-EXIT.
+            EXIT.
+
+      *=====================================================
+       3200-PROCESS-INSERT-PHARMACY.
+      *=====================================================
+
+           MOVE 'INSERT-PHARMACY' TO FUNCTION-CONT-DATA
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PHARMACY-SAVE-REQUEST
+           MOVE B1-KEY            TO BRG-Q04-PHARMACY-ID
+           MOVE B1-NAME           TO BRG-Q04-NAME
+           MOVE B1-CITY           TO BRG-Q04-CITY
+           MOVE B1-STATE          TO BRG-Q04-STATE
+           MOVE BRIDGE-PHARMACY-SAVE-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PHARMACY-SAVE-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PHARMACY-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA TO BRIDGE-PHARMACY-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R02-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to PHARMACY, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q04-PHARMACY-ID DELIMITED BY SIZE
+                  ' record inserted ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R02-RESP-RECORD-EXIST
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to PHARMACY, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q04-PHARMACY-ID DELIMITED BY SIZE
+                  ' record already exist' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to PHARMACY, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q04-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not inserted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           .
+       3200-EXIT.
+            EXIT.
+
+      *=====================================================
+       3300-PROCESS-INSERT-VSAM.
+      *=====================================================
+
+           INITIALIZE BRIDGE-VSAM-RECORD
+           MOVE B1-KEY   TO V1-KEY-1
+
+           EXEC CICS ASSIGN
+                APPLID (WS-REGION)
+                USERID (WS-USERID)
+                RESP   (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'ASSIGN command, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-EVALUATE
+
+           MOVE B1-NAME           TO V1-NAME
+           MOVE B1-CITY           TO V1-CITY
+           MOVE B1-STATE          TO VI-STATE
+           MOVE B1-DOB            TO V1-DOB
+           MOVE B1-GENDER         TO V1-GENDER
+           MOVE WS-REGION         TO V1-INS-REGION
+           MOVE WS-USERID         TO V1-INS-USERID
+           MOVE EIBTRMID          TO V1-INS-EIBTRMID
+           MOVE EIBTIME           TO V1-INS-EIBTIME
+           MOVE EIBDATE           TO V1-INS-EIBDATE
+
+           EXEC CICS WRITE
+                DATASET   ('BRIDGEF1')
+                FROM      (BRIDGE-VSAM-RECORD)
+                LENGTH    (LENGTH OF BRIDGE-VSAM-RECORD)
+                RIDFLD    (BRIDGE-KEY)
+                KEYLENGTH (LENGTH OF BRIDGE-KEY)
+                RESP      (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record inserted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(DUPREC)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record already in file' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(LENGERR)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record length error' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not inserted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       3300-EXIT.
+            EXIT.
+
+      *=====================================================
+       4000-PROCESS-UPDATE.
+      *=====================================================
+
+           EVALUATE TRUE
+             WHEN B1-PATIENT-ALL
+               PERFORM 4100-PROCESS-UPDATE-PATIENT THRU 4100-EXIT
+
+             WHEN B1-PHARMACY
+               PERFORM 4200-PROCESS-UPDATE-PHARMACY THRU 4200-EXIT
+
+             WHEN B1-VSAM
+               PERFORM 4300-PROCESS-UPDATE-VSAM THRU 4300-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Invalid resource code '
+                  DELIMITED BY SIZE
+                  B1-SCRIPT-2ND-CHAR DELIMITED BY SIZE
+                  ' Script id: ' DELIMITED BY SIZE
+                  B1-SCRIPT-KEY  DELIMITED BY SIZE
+                  ' record not updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       4000-EXIT.
+            EXIT.
+
+      *=====================================================
+       4100-PROCESS-UPDATE-PATIENT.
+      *=====================================================
+
+           EVALUATE TRUE
+              WHEN B1-PATIENT
+                MOVE 'UPDATE-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER
+                MOVE 'UPDATE-PATIENT-ONSERVER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION
+                MOVE 'UPDATE-PATIENT-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONREGION
+                MOVE 'SAVE-PATIENT-ONSERVER-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONMEMBER
+                MOVE 'SAVE-PATIENT-ONSERVER-ONMEMBER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONMEMBER
+                MOVE 'SAVE-PATIENT-ONREGION-ONMEMBER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONREGION
+                MOVE 'SAVE-PATIENT-ONREGION-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+           END-EVALUATE
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PATIENT-SAVE-REQUEST
+           MOVE B1-KEY            TO BRG-Q02-PATIENT-ID
+           MOVE B1-NAME           TO BRG-Q02-NAME
+           MOVE B1-CITY           TO BRG-Q02-CITY
+           MOVE B1-STATE          TO BRG-Q02-STATE
+           MOVE B1-DOB            TO BRG-Q02-DOB
+           MOVE B1-GENDER         TO BRG-Q02-GENDER
+           MOVE BRIDGE-PATIENT-SAVE-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PATIENT-SAVE-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PATIENT-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA TO BRIDGE-PATIENT-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R01-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q02-PATIENT-ID DELIMITED BY SIZE
+                  ' record updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R01-RESP-KEY-NOTFND
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q02-PATIENT-ID DELIMITED BY SIZE
+                  ' record not found' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q02-PATIENT-ID DELIMITED BY SIZE
+                  ' record not updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       4100-EXIT.
+            EXIT.
+
+      *=====================================================
+       4200-PROCESS-UPDATE-PHARMACY.
+      *=====================================================
+
+           MOVE 'UPDATE-PHARMACY'  TO  FUNCTION-CONT-DATA
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PHARMACY-SAVE-REQUEST
+           MOVE B1-KEY            TO BRG-Q04-PHARMACY-ID
+           MOVE B1-NAME           TO BRG-Q04-NAME
+           MOVE B1-CITY           TO BRG-Q04-CITY
+           MOVE B1-STATE          TO BRG-Q04-STATE
+           MOVE BRIDGE-PHARMACY-SAVE-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PHARMACY-SAVE-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PHARMACY-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA TO BRIDGE-PHARMACY-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R02-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to PHARMACY, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q04-PHARMACY-ID DELIMITED BY SIZE
+                  ' record updated ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R02-RESP-KEY-NOTFND
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to PHARMACY, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q04-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not found' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to PHARMACY, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q04-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           .
+       4200-EXIT.
+            EXIT.
+
+      *=====================================================
+       4300-PROCESS-UPDATE-VSAM.
+      *=====================================================
+
+           INITIALIZE BRIDGE-VSAM-RECORD
+           MOVE B1-KEY    TO V1-KEY-1
+
+      *----------------------------------------
+      *    read record for update
+      *----------------------------------------
+
+           EXEC CICS READ
+                DATASET   ('BRIDGEF1')
+                INTO      (BRIDGE-VSAM-RECORD)
+                LENGTH    (LENGTH OF BRIDGE-VSAM-RECORD)
+                RIDFLD    (BRIDGE-KEY)
+                KEYLENGTH (LENGTH OF BRIDGE-KEY)
+                UPDATE
+                RESP      (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN WS-RESP = DFHRESP(NOTFND)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read for update, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not found' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               GO TO 4300-EXIT
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read for update, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read for update, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read for update, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           EXEC CICS ASSIGN
+                APPLID (WS-REGION)
+                USERID (WS-USERID)
+                RESP   (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'ASSIGN command, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           MOVE B1-NAME           TO V1-NAME
+           MOVE B1-CITY           TO V1-CITY
+           MOVE B1-STATE          TO VI-STATE
+           MOVE B1-DOB            TO V1-DOB
+           MOVE B1-GENDER         TO V1-GENDER
+           MOVE WS-REGION         TO V1-MOD-REGION
+           MOVE WS-USERID         TO V1-MOD-USERID
+           MOVE EIBTRMID          TO V1-MOD-EIBTRMID
+           MOVE EIBTIME           TO V1-MOD-EIBTIME
+           MOVE EIBDATE           TO V1-MOD-EIBDATE
+
+           EXEC CICS REWRITE
+                DATASET   ('BRIDGEF1')
+                FROM      (BRIDGE-VSAM-RECORD)
+                LENGTH    (LENGTH OF BRIDGE-VSAM-RECORD)
+                RESP      (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(LENGERR)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record length error' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Update to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not updated' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       4300-EXIT.
+            EXIT.
+
+      *=====================================================
+       5000-PROCESS-READ.
+      *=====================================================
+
+           EVALUATE TRUE
+             WHEN B1-PATIENT-ALL
+               PERFORM 5100-PROCESS-READ-PATIENT THRU 5100-EXIT
+
+             WHEN B1-PHARMACY
+               PERFORM 5200-PROCESS-READ-PHARMACY THRU 5200-EXIT
+
+             WHEN B1-VSAM
+               PERFORM 5300-PROCESS-READ-VSAM THRU 5300-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Invalid resource code '
+                  DELIMITED BY SIZE
+                  B1-SCRIPT-2ND-CHAR DELIMITED BY SIZE
+                  ' script id:' DELIMITED BY SIZE
+                  B1-SCRIPT-KEY  DELIMITED BY SIZE
+                  ' record not read' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       5000-EXIT.
+            EXIT.
+
+      *=====================================================
+       5100-PROCESS-READ-PATIENT.
+      *=====================================================
+
+           EVALUATE TRUE
+              WHEN B1-PATIENT
+                MOVE 'READ-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER
+                MOVE 'READ-PATIENT-ONSERVER'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION
+                MOVE 'READ-PATIENT-ONREGION'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONREGION
+                MOVE 'READ-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONSERVER-TO-ONMEMBER
+                MOVE 'READ-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONMEMBER
+                MOVE 'READ-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+              WHEN B1-ONREGION-TO-ONREGION
+                MOVE 'READ-PATIENT'
+                             TO FUNCTION-CONT-DATA
+
+           END-EVALUATE
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PATIENT-READ-REQUEST
+           MOVE B1-KEY      TO BRG-Q01-PATIENT-ID
+           MOVE BRIDGE-PATIENT-READ-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PATIENT-READ-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PATIENT-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA TO BRIDGE-PATIENT-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R01-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q01-PATIENT-ID DELIMITED BY SIZE
+                  ' record read' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               MOVE BRIDGE-PATIENT-RESPONSE
+                                       TO MWTO-MSG-TEXT1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R01-RESP-KEY-NOTFND
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q01-PATIENT-ID DELIMITED BY SIZE
+                  ' record not found ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from Patient, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R01-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q01-PATIENT-ID DELIMITED BY SIZE
+                  ' record not read ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       5100-EXIT.
+            EXIT.
+
+      *=====================================================
+       5200-PROCESS-READ-PHARMACY.
+      *=====================================================
+
+           MOVE 'READ-PHARMACY' TO FUNCTION-CONT-DATA
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           INITIALIZE BRIDGE-PHARMACY-READ-REQUEST
+           MOVE B1-KEY        TO BRG-Q03-PHARMACY-ID
+           MOVE BRIDGE-PHARMACY-READ-REQUEST TO REQUEST-CONT-DATA
+           MOVE LENGTH OF BRIDGE-PHARMACY-READ-REQUEST
+                          TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+           MOVE LENGTH OF BRIDGE-PHARMACY-RESPONSE
+                              TO CONT-LENGTH
+           PERFORM 8100-GET-RESPONSE-CONT THRU 8100-EXIT
+           MOVE RESPONSE-CONT-DATA to BRIDGE-PHARMACY-RESPONSE
+           EVALUATE TRUE
+             WHEN BRG-R02-RESP-OK
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from Pharmacy, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q03-PHARMACY-ID DELIMITED BY SIZE
+                  ' record read ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               MOVE BRIDGE-PHARMACY-RESPONSE
+                                       TO MWTO-MSG-TEXT1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN BRG-R02-RESP-KEY-NOTFND
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from Pharmacy, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q03-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not found ' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from Pharmacy, CICS RC: '
+                                    DELIMITED BY SIZE
+                  BRG-R02-RESP-CODE DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  BRG-Q03-PHARMACY-ID DELIMITED BY SIZE
+                  ' record not read' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       5200-EXIT.
+            EXIT.
+
+      *=====================================================
+       5300-PROCESS-READ-VSAM.
+      *=====================================================
+
+           INITIALIZE BRIDGE-VSAM-RECORD
+           MOVE B1-KEY TO V1-KEY-1
+
+           EXEC CICS READ
+                DATASET   ('BRIDGEF1')
+                INTO      (BRIDGE-VSAM-RECORD)
+                LENGTH    (LENGTH OF BRIDGE-VSAM-RECORD)
+                RIDFLD    (BRIDGE-KEY)
+                KEYLENGTH (LENGTH OF BRIDGE-KEY)
+                RESP      (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' Key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record read' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               MOVE BRIDGE-VSAM-RECORD TO MWTO-MSG-TEXT1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(NOTFND)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' Key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not found' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING
+                  'Read from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' file disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Read from VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  V1-KEY-1 DELIMITED BY SIZE
+                  ' record not read' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       5300-EXIT.
+            EXIT.
+
+      *=====================================================
+       6100-PROCESS-EXPLICIT-COMMIT.
+      *=====================================================
+
+           EXEC CICS SYNCPOINT
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Explicit COMMIT in CICS OK, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Explicit COMMIT in CICS error, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-EVALUATE
+           .
+       6100-EXIT.
+            EXIT.
+
+      *=====================================================
+       6200-PROCESS-EXPLICIT-ROLLBACK.
+      *=====================================================
+
+           EXEC CICS SYNCPOINT
+                ROLLBACK
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Explicit ROLLBACK in CICS OK, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+             WHEN OTHER
+               STRING
+                  'Explicit ROLLBACK in CICS error, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       6200-EXIT.
+            EXIT.
+
+      *=====================================================
+       6300-PROCESS-ABEND.
+      *=====================================================
+
+           EXEC CICS ABEND
+                ABCODE   ('BRDG')
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'ABEND (BRDG) command OK, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'ABEND command error, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       6300-EXIT.
+            EXIT.
+
+      *=====================================================
+       6400-LINK-TO-JAVA-PROGRAM.
+      *=====================================================
+
+           MOVE SPACES TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+           MOVE ALL '~'  TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+           EVALUATE TRUE
+              WHEN M20EMCJC-ACTION-COMMIT
+                STRING
+                   WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Link to JAVA program (M20EMCJC), for commit'
+                    DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+              WHEN M20EMCJC-ACTION-ROLLBACK
+                STRING
+                   WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Link to JAVA program (M20EMCJC), for rollback'
+                    DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+              WHEN M20EMCJC-ACTION-TERMINATE
+                STRING
+                   WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Link to JAVA program (M20EMCJC), for terminate'
+                    DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-EVALUATE
+
+      **** PERFORM 9120-GET-TRANSACTION-CONT THRU 9120-EXIT
+      **** IF WS-RESP = DFHRESP(NORMAL)
+              MOVE WSC-UOWID  TO M20EMCJC-UOWID
+      **** ELSE
+      ****    STRING
+      ****       'could not get the UOWID, did not link to M20EMCJC'
+      ****      DELIMITED BY SIZE
+      ****                      INTO MWTO-MSG-TEXT1
+      ****    END-STRING
+      ****    PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+      ****    GO TO 6400-EXIT
+      **** END-IF
+
+           EXEC CICS LINK
+              PROGRAM  ('M20EMCJC')
+              COMMAREA (M20EMCJC-COMMAREA)
+              RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+             WHEN OTHER
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Link to JAVA program (M20EMCJC), '
+                  DELIMITED BY SIZE
+                  'failed CICS RC:'  DELIMITED BY SIZE
+                   WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                SET B1-SCRIPT-ERROR  TO  TRUE
+                GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           EVALUATE TRUE
+              WHEN M20EMCJC-RESP-SUCCESS
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Status from JAVA program (M20EMCJC): '
+                  DELIMITED BY SIZE
+                  M20EMCJC-RESPONSE-STATUS
+                             DELIMITED BY SIZE
+                  ' successful' DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+              WHEN M20EMCJC-RESP-INVALID-UOWID
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Status from JAVA program (M20EMCJC): '
+                  DELIMITED BY SIZE
+                  M20EMCJC-RESPONSE-STATUS
+                             DELIMITED BY SIZE
+                  ' invalid UOWID' DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                SET B1-SCRIPT-ERROR  TO  TRUE
+                GO TO 9999-RETURN-TO-CICS
+
+              WHEN M20EMCJC-RESP-INVALID-ACTION
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Status from JAVA program (M20EMCJC): '
+                  DELIMITED BY SIZE
+                  M20EMCJC-RESPONSE-STATUS
+                             DELIMITED BY SIZE
+                  ' invalid action' DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                SET B1-SCRIPT-ERROR  TO  TRUE
+                GO TO 9999-RETURN-TO-CICS
+
+              WHEN M20EMCJC-RESP-SYSTEM-ERROR
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Status from JAVA program (M20EMCJC): '
+                  DELIMITED BY SIZE
+                  M20EMCJC-RESPONSE-STATUS
+                             DELIMITED BY SIZE
+                  ' system error' DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                SET B1-SCRIPT-ERROR  TO  TRUE
+                GO TO 9999-RETURN-TO-CICS
+
+              WHEN M20EMCJC-RESP-CONTAINER-ERROR
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Status from JAVA program (M20EMCJC): '
+                  DELIMITED BY SIZE
+                  M20EMCJC-RESPONSE-STATUS
+                             DELIMITED BY SIZE
+                  ' container error' DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                SET B1-SCRIPT-ERROR  TO  TRUE
+                GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           MOVE ALL '~'  TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           .
+       6400-EXIT.
+            EXIT.
+
+      *=====================================================
+       7000-PROCESS-ERROR-HANDLING.
+      *=====================================================
+
+           MOVE 'THROWEXCEPTION' TO FUNCTION-CONT-DATA
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           MOVE B1-SCRIPT-RECORD (2:79)
+                          TO REQUEST-CONT-DATA
+           MOVE 79        TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+
+      *****PERFORM 7100-GET-BRIDGE-ERROR-CONT THRU 7100-EXIT
+           .
+       7000-EXIT.
+            EXIT.
+
+      *=====================================================
+       7100-GET-BRIDGE-ERROR-CONT.
+      *=====================================================
+
+           MOVE LENGTH OF BRG1-ERROR-CONT-DATA
+                       TO BRG1-ERROR-CONT-LENGTH
+           EXEC CICS GET
+                CHANNEL  (JBRIDGE-CH-NAME)
+                CONTAINER(BRG1-ERROR-CONT-NAME)
+                INTO     (BRG1-ERROR-CONT-DATA)
+                FLENGTH  (BRG1-ERROR-CONT-LENGTH)
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               PERFORM 7120-LOG-ERROR-DATA THRU 7120-EXIT
+
+             WHEN WS-RESP = DFHRESP(CONTAINERERR)
+               STRING
+                  '*** BRIDGE-ERROR cont. not found RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(LENGERR)
+               STRING
+                  '*** BRIDGE-ERROR cont. length error RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  '*** BRIDGE-ERROR cont. GET error, RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       7100-EXIT.
+            EXIT.
+
+      *=====================================================
+       7120-LOG-ERROR-DATA.
+      *=====================================================
+
+           MOVE SPACES TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE ALL '~' TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           STRING
+              WS-PROGRAM-ID DELIMITED BY SIZE
+              '. Display BRIDGE-ERROR container start'
+                            DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE SPACES TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+           STRING
+              'Prg: '
+              DELIMITED BY SIZE
+              BRG1-PROGRAM-ID DELIMITED BY SIZE
+              ' Category: '
+              DELIMITED BY SIZE
+              BRG1-ERROR-CATEGORY DELIMITED BY SIZE
+              ' Code: '
+              DELIMITED BY SIZE
+              BRG1-ERROR-CODE DELIMITED BY SIZE
+              ' Function: '
+              DELIMITED BY SIZE
+              BRG1-FUNCTION-NAME DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE SPACES TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE 1 TO SUB1
+           PERFORM UNTIL SUB1 > BRG1-ERROR-CONT-LENGTH
+                OR BRG1-DATA (SUB1 : 1) = LOW-VALUES
+              MOVE BRG1-DATA (SUB1 : 72)
+                                  TO MWTO-MSG-TEXT1
+              IF MWTO-MSG-TEXT1 = LOW-VALUES
+                 CONTINUE
+              ELSE
+                 PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+              END-IF
+              ADD 72 TO SUB1
+           END-PERFORM
+           MOVE SPACES TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           STRING
+              WS-PROGRAM-ID DELIMITED BY SIZE
+              '. Display BRIDGE-ERROR container end'
+                            DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE ALL '~' TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           .
+       7120-EXIT.
+            EXIT.
+
+      *=====================================================
+       7500-PROCESS-FUNC-NOT-VALID.
+      *=====================================================
+
+           MOVE 'TEST-ERROR' TO FUNCTION-CONT-DATA
+           PERFORM 8200-PUT-FUNCTION-CONT THRU 8200-EXIT
+
+           MOVE B1-SCRIPT-RECORD (2:79)
+                          TO REQUEST-CONT-DATA
+           MOVE 79        TO CONT-LENGTH
+           PERFORM 8300-PUT-REQUEST-CONT THRU 8300-EXIT
+
+           PERFORM 9100-LINK-TO-COBOL-BRIDGE THRU 9100-EXIT
+           .
+       7500-EXIT.
+            EXIT.
+
+      *=====================================================
+       8100-GET-RESPONSE-CONT.
+      *=====================================================
+
+           EXEC CICS GET
+                CHANNEL  (JBRIDGE-CH-NAME)
+                CONTAINER(RESPONSE-CONT-NAME)
+                INTO     (RESPONSE-CONT-DATA)
+                FLENGTH  (CONT-LENGTH)
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN WS-RESP = DFHRESP(CONTAINERERR)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'RESPONSE cont. not found RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(LENGERR)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'RESPONSE cont. length error RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'RESPONSE cont. GET error, RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       8100-EXIT.
+            EXIT.
+
+      *=====================================================
+       8200-PUT-FUNCTION-CONT.
+      *=====================================================
+
+           EXEC CICS PUT
+                CHANNEL  (JBRIDGE-CH-NAME)
+                CONTAINER(FUNCTION-CONT-NAME)
+                FROM     (FUNCTION-CONT-DATA)
+                FLENGTH  (LENGTH OF FUNCTION-CONT-DATA)
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Function: '
+                  DELIMITED BY SIZE
+                  FUNCTION-CONT-DATA DELIMITED BY ' '
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               MOVE SPACES  TO  MWTO-MSG-TEXT1
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'FUNCTION cont. PUT error, RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       8200-EXIT.
+            EXIT.
+
+      *=====================================================
+       8210-DELETE-FUNCTION-CONT.
+      *=====================================================
+
+           EXEC CICS DELETE
+                CHANNEL  (JBRIDGE-CH-NAME)
+                CONTAINER(FUNCTION-CONT-NAME)
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN WS-RESP = DFHRESP(CHANNELERR)
+               CONTINUE
+
+             WHEN WS-RESP = DFHRESP(CONTAINERERR)
+               CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'FUNCTION cont. DELETE error, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       8210-EXIT.
+            EXIT.
+
+      *=====================================================
+       8300-PUT-REQUEST-CONT.
+      *=====================================================
+
+           EXEC CICS PUT
+                CHANNEL  (JBRIDGE-CH-NAME)
+                CONTAINER(REQUEST-CONT-NAME)
+                FROM     (REQUEST-CONT-DATA)
+                FLENGTH  (CONT-LENGTH)
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'REQUEST cont. PUT error, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       8300-EXIT.
+            EXIT.
+
+      *=====================================================
+       9000-WRITE-LOG.
+      *=====================================================
+
+           MOVE 100   TO MWTO-MSGLEN
+           SET  MWTO-CSMT-LOG-ONLY  TO TRUE
+
+           EXEC CICS LINK PROGRAM('MEDP995')
+                     COMMAREA(MWTO-COMMAREA)
+                     NOHANDLE
+           END-EXEC
+
+           MOVE SPACES    TO MWTO-MSG-TEXT1
+           .
+       9000-EXIT.
+            EXIT.
+
+      *=====================================================
+       9010-WRITE-TO-CONSOLE.
+      *=====================================================
+
+           EXEC CICS WRITEQ TD QUEUE('AMSG')
+                FROM   (WS-CONSOLE-MSG)
+                LENGTH (80)
+                RESP   (WS-RESP)
+                NOHANDLE
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+                  CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'WRITEQ TD error CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                               INTO WS-SCREEN-MSG
+               END-STRING
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       9010-EXIT.
+            EXIT.
+
+      *=====================================================
+       9070-GET-TIME.
+      *=====================================================
+
+           EXEC CICS ASKTIME
+                ABSTIME (WS-ABSTIME)
+           END-EXEC
+
+           EXEC CICS FORMATTIME
+                ABSTIME (WS-ABSTIME)
+                MMDDYYYY(WS-MMDDYYYY)
+                TIME    (WS-TIME-HHMMSS)
+                DATESEP ('/')
+                TIMESEP (':')
+           END-EXEC
+           .
+       9070-EXIT.
+            EXIT.
+
+      *=====================================================
+       9080-GET-UOW.
+      *=====================================================
+
+           EXEC CICS INQUIRE
+                TASK    (EIBTASKN)
+                UOW     (WS-UOW)
+                RESP    (WS-RESP)
+           END-EXEC
+
+           EXEC CICS ASSIGN
+                APPLID (WS-REGION)
+                SYSID  (WS-SYSID)
+                USERID (WS-USERID)
+                RESP   (WS-RESP)
+           END-EXEC
+
+      *-------------------------------------------------
+      *    convert text to hex from detail line data
+      *-------------------------------------------------
+
+           INITIALIZE  WS-CONV-ZONE
+                       WS-CONV-DIGT
+           MOVE 8  TO WS-TEXT-LENGTH
+           PERFORM VARYING WS-TXT-SUB FROM 1 BY 1
+                       UNTIL WS-TXT-SUB > WS-TEXT-LENGTH
+              MOVE WS-UOW (WS-TXT-SUB : 1) TO WS-CONV-BYTE
+              DIVIDE WS-CONV-NUM BY 16 GIVING WS-QUOTIENT
+                        REMAINDER WS-REMAINDER
+              MOVE WS-HEX-CHAR (WS-QUOTIENT + 1) TO
+                             WS-CONV-ZONE (WS-TXT-SUB:1)
+              MOVE WS-HEX-CHAR(WS-REMAINDER + 1) TO
+                     WS-CONV-DIGT (WS-TXT-SUB:1)
+           END-PERFORM
+
+           INITIALIZE WS-CONVERTED-TEXT
+           MOVE ZERO TO I J
+           PERFORM VARYING I FROM 1 BY 1
+                       UNTIL I > WS-TEXT-LENGTH
+              ADD 1   TO J
+              MOVE WS-CONV-ZONE (I:1) TO WS-CONVERTED-TEXT (J:1)
+              ADD 1   TO J
+              MOVE WS-CONV-DIGT (I:1) TO WS-CONVERTED-TEXT (J:1)
+           END-PERFORM
+
+           STRING
+             WS-PREFIX-MSG DELIMITED BY SIZE
+             'UOW ID : ' DELIMITED BY SIZE
+             WS-SYSID DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-REGION DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-TASKN DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-UOW DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-CONVERTED-TEXT DELIMITED BY SPACE
+                      INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           .
+       9080-EXIT.
+            EXIT.
+
+      *=====================================================
+       9100-LINK-TO-COBOL-BRIDGE.
+      *=====================================================
+
+           EXEC CICS LINK
+              PROGRAM (WS-COBOL-BRIDGE)
+              CHANNEL (JBRIDGE-CH-NAME)
+              RESP    (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN OTHER
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'LINK to cobol bridge program ('
+                  DELIMITED BY SIZE
+                  WS-COBOL-BRIDGE DELIMITED BY SIZE
+                  ') failed CICS RC: ' DELIMITED BY SIZE
+                   WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                SET B1-SCRIPT-ERROR  TO  TRUE
+                GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+
+           PERFORM 9120-GET-TRANSACTION-CONT THRU 9120-EXIT
+           .
+       9100-EXIT.
+            EXIT.
+
+      *=====================================================
+       9120-GET-TRANSACTION-CONT.
+      *=====================================================
+
+           EXEC CICS GET
+                CHANNEL  (JBRIDGE-CH-NAME)
+                CONTAINER(TRANSACTION-CONT-NAME)
+                INTO     (TRANSACTION-CONT-DATA)
+                FLENGTH  (LENGTH OF TRANSACTION-CONT-DATA)
+                RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               MOVE SPACES TO MWTO-MSG-TEXT1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               EVALUATE TRUE
+                  WHEN WSC-NONE
+                     MOVE 'None'   TO WS-TRANS-STATUS
+                  WHEN WSC-READ
+                     MOVE 'Read'   TO WS-TRANS-STATUS
+                  WHEN WSC-WRITE
+                     MOVE 'Write'  TO WS-TRANS-STATUS
+                  WHEN OTHER
+                     MOVE 'None'   TO WS-TRANS-STATUS
+               END-EVALUATE
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'UOWID: '
+                  DELIMITED BY SIZE
+                  WSC-UOWID DELIMITED BY SIZE
+                  ' trans status: ' DELIMITED BY SIZE
+                  WS-TRANS-STATUS DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+      *********PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               MOVE SPACES   TO MWTO-MSG-TEXT1
+
+             WHEN WS-RESP = DFHRESP(CONTAINERERR)
+               STRING
+                  '*** TRANSACTION cont. not found RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+             WHEN WS-RESP = DFHRESP(LENGERR)
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'TRANSACTION cont. length error CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'TRANSACTION cont. GET error, CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               SET B1-SCRIPT-ERROR  TO  TRUE
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       9120-EXIT.
+            EXIT.
+
+      *=====================================================
+       9999-RETURN-TO-CICS.
+      *=====================================================
+
+      *----------------------------------------
+      *    delete function container
+      *----------------------------------------
+
+      **** PERFORM 8210-DELETE-FUNCTION-CONT THRU 8210-EXIT
+
+           IF B1-SCRIPT-ERROR
+              MOVE B1-SCRIPT-RECORD  TO DFHCOMMAREA                     00055200
+           END-IF
+
+           EXEC CICS RETURN
+           END-EXEC
+
+           GOBACK
+           .
+       9999-EXIT.
+            EXIT.
+      *=====================================================
+      *    END OF PROGRAM M20PEN11
+      *=====================================================
