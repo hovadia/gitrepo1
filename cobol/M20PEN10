@@ -1,0 +1,915 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID.    M20PEN10.
+      *--------------------------------------------------------------*
+      *                                                              *
+      *  This program is reads the script file and link to M20PEN11  *
+      *  to execute the functions. This program initiated by M2N1    *
+      *  transid. The program will write a record for statistics     *
+      *                                                              *
+      *  MODIFICATION LOG                                            *
+      *                                                              *
+      *  MM/DD/YY   USERID    CHANGE DESCRIPTION                     *
+      *  ~~~~~~~~   ~~~~~~~~  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   *
+      *  12/21/11   P07319    New program                            *
+      *                                                              *
+      *                                                              *
+      *--------------------------------------------------------------*
+       ENVIRONMENT DIVISION.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  FILLER                    PIC X(50) VALUE
+           '**** M20PEN10 WORKING STORAGE STARTS HERE ****'.
+
+       01  WS-MISC-FIELDS.
+           05 WS-PROGRAM-ID          PIC X(08) VALUE 'M20PEN10'.
+           05 WS-PREFIX-MSG          PIC X(05) VALUE 'N10; '.
+           05 I                      PIC 9(04).
+           05 J                      PIC 9(04).
+           05 SUB                    PIC 9(04).
+           05 WS-SCREEN-MSG          PIC X(79) VALUE SPACES.
+           05 WS-CONSOLE-MSG         PIC X(79) VALUE SPACES.
+           05 WS-MESSAGE             PIC X(30) VALUE ' '.
+           05 WS-RECORDS-IN-SCRIPT   PIC 9(03).
+           05 WS-RECORDS-PROCESSED   PIC 9(03).
+           05 WS-END-OF-LOOP         PIC X(01).
+              88 END-OF-LOOP                  VALUE 'Y'.
+           05 WS-ERROR-IND           PIC X(01).
+              88 ERROR-FOUND                  VALUE 'Y'.
+           05 WS-SCRIPT-IND          PIC X(01).
+              88 SCRIPT-OK                    VALUE ' '.
+              88 SCRIPT-INVALID-DATA          VALUE 'Y'.
+
+       01  WS-CICS-FIELDS.
+           05 WS-RESP                PIC S9(08) VALUE +0.
+           05 WS-RESP-NUM            PIC 9(04).
+           05 WS-TASKN               PIC 9(07).
+           05 WS-REGION              PIC X(08).
+           05 WS-SYSID               PIC X(04).
+           05 WS-USERID              PIC X(08).
+           05 WS-UOW                 PIC X(08).
+
+       01  WS-DATE-FIELDS.
+           05 WS-DATE-TIME.
+              10 WS-TIME-HHMMSS      PIC X(08).
+              10 FILLER REDEFINES WS-TIME-HHMMSS.
+                 15 WS-HOUR          PIC X(02).
+                 15 FILLER           PIC X(01).
+                 15 WS-MINUTES       PIC X(02).
+                 15 FILLER           PIC X(01).
+                 15 WS-SECONDS       PIC X(02).
+              10 WS-MMDDYYYY         PIC X(10).
+              10 FILLER REDEFINES WS-MMDDYYYY.
+                 15 WS-MM            PIC X(02).
+                 15 WS-SLASH-1       PIC X(01).
+                 15 WS-DD            PIC X(02).
+                 15 WS-SLASH-2       PIC X(01).
+                 15 WS-YYYY          PIC X(04).
+              10 WS-MMDDYY-NUM       pic 9(06).
+           05 WS-ABSTIME             PIC S9(15) VALUE +0 COMP-3.
+           05 WS-ABSTIME-9           PIC  9(15).
+           05 WS-ABSTIME-START       PIC S9(15) VALUE +0 COMP-3.
+           05 WS-ABSTIME-END         PIC S9(15) VALUE +0 COMP-3.
+           05 WS-ABSTIME-ELAPSED     PIC 9(15).
+
+      *--------------------------------------------
+      *     Terminal i/o
+      *--------------------------------------------
+       01  WS-TIOA.
+           05 TIOA-TRANS                 PIC X(04).
+           05 FILLER                     PIC X(01).
+           05 TIOA-SCRIPT-ID             PIC X(04).
+           05 FILLER                     PIC X(71).
+
+      *--------------------------------------------
+      *     screen text
+      *--------------------------------------------
+       01  SCREEN-TEXT.
+           05 SCREEN-1ST-LINE   PIC X(80) VALUE SPACES.
+           05 FILLER            PIC X(80) VALUE SPACES.
+           05 FILLER            PIC X(80) VALUE SPACES.
+           05 FILLER            PIC X(80) VALUE SPACES.
+           05 SCREEN-LINE-1     PIC X(80) VALUE SPACES.
+           05 SCREEN-LINE-2     PIC X(80) VALUE SPACES.
+
+      *--------------------------------------------
+      *     Load all script record to table
+      *--------------------------------------------
+       01  T1-SCRIPT-RECORDS.
+           05 T1-LINE       PIC X(200) OCCURS 1000.
+
+      *--------------------------------------------
+      *     Bridge Script record
+      *--------------------------------------------
+       COPY BRGSCRP1 REPLACING ':T:' BY B1.
+
+      *----------------------------------------------------
+      *     commarea link to M20PEN11 to execute function
+      *----------------------------------------------------
+       01  SCRIPT-COMMAREA       PIC X(200).
+
+      *--------------------------------------------
+      *     Bridge Statistics file
+      *--------------------------------------------
+       COPY BRGSTAT1 REPLACING ':T:' BY S1.
+
+      *--------------------------------------------
+      *     Convert text to Hex
+      *--------------------------------------------
+       01  WS-CONVERT-FIELDS.
+           05 WS-TEXT-LENGTH     PIC S9(04)  VALUE ZERO COMP.
+           05 WS-QUOTIENT        PIC S9(04)  VALUE ZERO COMP.
+           05 WS-REMAINDER       PIC S9(04)  VALUE ZERO COMP.
+           05 WS-TXT-SUB         PIC S9(04)  VALUE ZERO COMP.
+           05 WS-CONV-BYTE-NUM.
+              10 FILLER          PIC  X(01)  VALUE LOW-VALUES.
+              10 WS-CONV-BYTE    PIC  X(01).
+           05  WS-CONV-NUM  REDEFINES WS-CONV-BYTE-NUM PIC 9(4) COMP.
+           05  WS-CONV-ZONE      PIC  X(10) VALUE SPACE.
+           05  WS-CONV-DIGT      PIC  X(10) VALUE SPACE.
+           05  WS-HEX-CHARACTERS PIC  X(16)  VALUE '0123456789ABCDEF'.
+           05  FILLER REDEFINES WS-HEX-CHARACTERS.
+               10  WS-HEX-CHAR   PIC  X(01)  OCCURS 16 TIMES.
+           05  WS-CONVERTED-TEXT PIC  X(50) VALUE SPACE.
+
+       COPY MEDIWTO.
+
+       01  FILLER                       PIC X(50) VALUE
+           '**** M20PEN10 WORKING STORAGE ENDS HERE ****'.
+
+       PROCEDURE DIVISION.
+      *=====================================================
+       0000-MAINLINE.
+      *=====================================================
+
+           MOVE ZERO      TO WS-ABSTIME-ELAPSED
+                             WS-RECORDS-IN-SCRIPT
+                             WS-RECORDS-PROCESSED
+
+      *----------------------------------------
+      *    log start of task
+      *----------------------------------------
+
+           MOVE EIBTASKN  TO WS-TASKN
+
+           PERFORM 9070-GET-TIME THRU 9070-EXIT
+           MOVE SPACES TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE ALL '-'  TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           STRING WS-PREFIX-MSG DELIMITED BY SIZE
+              'Trnid: ' DELIMITED BY SIZE
+              EIBTRNID DELIMITED BY SIZE
+              ' pgm: ' DELIMITED BY SIZE
+              WS-PROGRAM-ID DELIMITED BY SIZE
+              ' Trmid: ' DELIMITED BY SIZE
+              EIBTRMID DELIMITED BY SIZE
+              ' started ' DELIMITED BY SIZE
+              WS-TIME-HHMMSS DELIMITED BY SIZE
+                          INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           PERFORM 9080-GET-UOW THRU 9080-EXIT
+           MOVE ALL '-'  TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           MOVE SPACES   TO MWTO-MSG-TEXT1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+      *----------------------------------------
+      *    retrieve / receive data
+      *----------------------------------------
+
+           EXEC CICS RECEIVE
+                INTO    (WS-TIOA)
+                LENGTH  (LENGTH OF WS-TIOA)
+                ASIS
+                RESP    (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+           IF WS-RESP = DFHRESP(NORMAL) OR
+                WS-RESP = DFHRESP(LENGERR) OR
+                  WS-RESP = DFHRESP(EOC)
+              MOVE WS-TIOA (1:14)   TO  SCREEN-1ST-LINE
+           ELSE
+              STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Receive command error CICS RC: '
+                 DELIMITED BY SIZE
+                 WS-RESP-NUM DELIMITED BY SIZE
+                             INTO MWTO-MSG-TEXT1
+              END-STRING
+              MOVE MWTO-MSG-TEXT1 TO SCREEN-LINE-1
+              PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+              PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+              GO TO 9999-RETURN-TO-CICS
+           END-IF
+
+      *------------------------------------------------------
+      *    loop thru all script end verify all records
+      *------------------------------------------------------
+
+           INITIALIZE B1-SCRIPT-RECORD                                  00055200
+           MOVE TIOA-SCRIPT-ID  TO  B1-SCRIPT-ID                        00055200
+           PERFORM 1100-STARTBR-BRGSCRP1 THRU 1100-EXIT
+
+           MOVE ZERO   TO  WS-RECORDS-IN-SCRIPT
+           MOVE SPACES TO  WS-SCRIPT-IND
+           MOVE SPACES TO  WS-END-OF-LOOP
+           MOVE ZERO   TO  SUB
+
+           PERFORM WITH TEST BEFORE UNTIL END-OF-LOOP
+              PERFORM 1200-READNEXT-BRGSCRP1 THRU 1200-EXIT
+              IF TIOA-SCRIPT-ID = B1-SCRIPT-ID                          00055200
+                 ADD 1 TO  WS-RECORDS-IN-SCRIPT
+                 ADD 1 TO  SUB
+                 MOVE B1-SCRIPT-RECORD   TO  T1-LINE (SUB)
+                 PERFORM 1300-VALIDATE-SCRIPT-RECORD THRU 1300-EXIT
+              ELSE                                                      00055200
+                 SET END-OF-LOOP  TO  TRUE
+              END-IF                                                    00055200
+           END-PERFORM
+
+           PERFORM 1500-ENDBR-BRGSCRP1 THRU 1500-EXIT
+
+           IF WS-RECORDS-IN-SCRIPT = ZERO
+              STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'There are no records for the script entered'
+                 DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+              END-STRING
+              MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+              PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+              PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+              GO TO 9999-RETURN-TO-CICS
+           END-IF
+
+           IF SCRIPT-INVALID-DATA
+              MOVE 'There are error in the script file'
+                                   TO SCREEN-LINE-1
+              MOVE 'View CICS log dataset to check errors'
+                                   TO SCREEN-LINE-2
+              PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+              GO TO 9999-RETURN-TO-CICS
+           END-IF
+
+      *------------------------------------------------------
+      *    No error found in script.
+      *    Loop thru all records and link to be executed
+      *------------------------------------------------------
+
+           MOVE ZERO   TO  WS-RECORDS-PROCESSED
+           MOVE SPACES TO  WS-SCRIPT-IND
+           MOVE SPACES TO  WS-END-OF-LOOP
+           MOVE SPACES TO  WS-ERROR-IND
+
+           EXEC CICS ASKTIME
+                ABSTIME (WS-ABSTIME-START)
+           END-EXEC
+
+           MOVE WS-ABSTIME-START    TO  WS-ABSTIME-9
+           STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Start time: ' DELIMITED BY SIZE
+                WS-ABSTIME-9 DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+           PERFORM VARYING SUB FROM 1 BY 1 UNTIL SUB >
+                       WS-RECORDS-IN-SCRIPT OR ERROR-FOUND
+              MOVE T1-LINE (SUB)  TO  B1-SCRIPT-RECORD
+              ADD 1 TO  WS-RECORDS-PROCESSED
+              PERFORM 2000-LINK-TO-M20PEN11 THRU 2000-EXIT
+           END-PERFORM
+
+           EXEC CICS ASKTIME
+                ABSTIME (WS-ABSTIME-END)
+           END-EXEC
+
+           MOVE WS-ABSTIME-END      TO  WS-ABSTIME-9
+           STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'end time: ' DELIMITED BY SIZE
+                WS-ABSTIME-9 DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+           COMPUTE WS-ABSTIME-ELAPSED =
+                   WS-ABSTIME-START - WS-ABSTIME-END
+           END-COMPUTE
+
+           MOVE WS-ABSTIME-ELAPSED  TO  WS-ABSTIME-9
+           STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Elapsed time: ' DELIMITED BY SIZE
+                WS-ABSTIME-9 DELIMITED BY SIZE
+                              INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+
+      *------------------------------------------------------
+      *    write a statistic record
+      *------------------------------------------------------
+
+           IF ERROR-FOUND
+              GO TO 9999-RETURN-TO-CICS
+           END-IF
+
+           STRING WS-PREFIX-MSG DELIMITED BY SIZE
+              WS-RECORDS-PROCESSED DELIMITED BY SIZE
+              ' number of records processed'
+              DELIMITED BY SIZE
+                           INTO MWTO-MSG-TEXT1
+           END-STRING
+           MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+           GO TO 9999-RETURN-TO-CICS
+           .
+       0000-EXIT.
+            EXIT.
+
+      *=====================================================
+       1100-STARTBR-BRGSCRP1.
+      *=====================================================
+
+           EXEC CICS STARTBR                                            00054900
+                FILE      ('BRGSCRP1')                                  00055000
+                RIDFLD    (B1-SCRIPT-KEY)                               00055100
+                KEYLENGTH (LENGTH OF B1-SCRIPT-KEY)                     00055200
+                RESP      (WS-RESP)                                     00055300
+                GTEQ                                                    00055400
+           END-EXEC                                                     00055500
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE                                                 00055800
+
+             WHEN WS-RESP = DFHRESP(NOTFND)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'There are no records for the script entered'
+                  DELIMITED BY SIZE
+                               INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'STARTBR error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file BRGSCRP1 not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'STARTBR error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file BRGSCRP1 disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'STARTBR error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file BRGSCRP1' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       1100-EXIT.
+            EXIT.
+
+      *=====================================================
+       1200-READNEXT-BRGSCRP1.
+      *=====================================================
+
+           EXEC CICS READNEXT                                           00054900
+                FILE    ('BRGSCRP1')                                    00055000
+                RIDFLD  (B1-SCRIPT-KEY)                                 00055100
+                INTO    (B1-SCRIPT-RECORD)                              00055200
+                RESP    (WS-RESP)                                       00055300
+           END-EXEC                                                     00055500
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE                                                 00055800
+
+             WHEN WS-RESP = DFHRESP(ENDFILE) OR
+                    WS-RESP = DFHRESP(NOTFND)
+                MOVE HIGH-VALUES TO B1-SCRIPT-RECORD                    00055200
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'READNEXT error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file BRGSCRP1 not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'READNEXT error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file BRGSCRP1 disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'READNEXT error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file BRGSCRP1' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       1200-EXIT.
+            EXIT.
+
+      *=====================================================
+       1300-VALIDATE-SCRIPT-RECORD.
+      *=====================================================
+
+           IF B1-VALID-1ST-CHAR
+              CONTINUE
+           ELSE
+              SET SCRIPT-INVALID-DATA TO TRUE
+              STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Invalid first character: '
+                 DELIMITED BY SIZE
+                 B1-SCRIPT-1ST-CHAR DELIMITED BY SIZE
+                 ' in script: ' DELIMITED BY SIZE
+                 B1-SCRIPT-ID DELIMITED BY SIZE
+                 ' seq: ' DELIMITED BY SIZE
+                 B1-SCRIPT-SEQ DELIMITED BY SIZE
+                 ' Valid character: I,D,Q,U,C,R,A,T,E'
+                 DELIMITED BY SIZE
+                               INTO MWTO-MSG-TEXT1
+              END-STRING
+              PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-IF
+           IF B1-VALID-2ND-CHAR OR
+               B1-SCRIPT-2ND-CHAR = SPACES OR
+                B1-SCRIPT-2ND-CHAR = LOW-VALUES OR
+                 B1-SCRIPT-1ST-CHAR = 'E' OR
+                  B1-SCRIPT-1ST-CHAR = 'X'
+              CONTINUE
+           ELSE
+              SET SCRIPT-INVALID-DATA TO TRUE
+              STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                 'Invalid 2nd character: '
+                 DELIMITED BY SIZE
+                 B1-SCRIPT-2ND-CHAR DELIMITED BY SIZE
+                 ' in script: ' DELIMITED BY SIZE
+                 B1-SCRIPT-ID DELIMITED BY SIZE
+                 ' seq: ' DELIMITED BY SIZE
+                 B1-SCRIPT-SEQ DELIMITED BY SIZE
+                 ' Valid 2nd character: P,H,V,E or blank'
+                 DELIMITED BY SIZE
+                               INTO MWTO-MSG-TEXT1
+              END-STRING
+              PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-IF
+           .
+       1300-EXIT.
+            EXIT.
+
+      *=====================================================
+       1500-ENDBR-BRGSCRP1.
+      *=====================================================
+
+           EXEC CICS ENDBR                                              00064400
+                FILE ('BRGSCRP1')                                       00055000
+                RESP (WS-RESP)                                          00055300
+           END-EXEC                                                     00055500
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE                                                 00055800
+
+             WHEN OTHER
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'ENDBR error, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' on file BRGSCRP1' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 9999-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       1500-EXIT.
+            EXIT.
+
+      *=====================================================
+       2000-LINK-TO-M20PEN11.
+      *=====================================================
+
+           MOVE B1-SCRIPT-RECORD  TO  SCRIPT-COMMAREA
+
+           EXEC CICS LINK
+              PROGRAM  ('M20PEN11')
+              COMMAREA (SCRIPT-COMMAREA)
+              RESP     (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+             WHEN OTHER
+                STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                   'Link to (M20PEN11), '
+                  DELIMITED BY SIZE
+                  'failed CICS RC:'  DELIMITED BY SIZE
+                   WS-RESP-NUM DELIMITED BY SIZE
+                                  INTO MWTO-MSG-TEXT1
+                END-STRING
+                MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+                PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+                PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+                SET ERROR-FOUND  TO  TRUE
+                GO TO 2000-EXIT
+           END-EVALUATE
+
+           MOVE SCRIPT-COMMAREA TO  B1-SCRIPT-RECORD
+           IF B1-SCRIPT-ERROR
+              MOVE 'There are error in the script processed'
+                                   TO SCREEN-LINE-1
+              MOVE 'View CICS log dataset to check errors'
+                                   TO SCREEN-LINE-2
+              PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+              SET ERROR-FOUND  TO  TRUE
+              GO TO 2000-EXIT
+           END-IF                                                       00055200
+           .
+       2000-EXIT.
+            EXIT.
+
+      *=====================================================
+       3000-WRITE-BRGSTAT1.
+      *=====================================================
+
+           EXEC CICS ASSIGN
+                APPLID (WS-REGION)
+                USERID (WS-USERID)
+                RESP   (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'ASSIGN command, CICS RC: ' DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           END-EVALUATE
+
+           INITIALIZE S1-RECORD
+           MOVE TIOA-SCRIPT-ID  TO  S1-SCRIPT-ID
+
+           MOVE WS-YYYY               TO  S1-DATE-YYYY
+           MOVE WS-MM                 TO  S1-DATE-MM
+           MOVE WS-DD                 TO  S1-DATE-DD
+           MOVE WS-HOUR               TO  S1-HOUR
+           MOVE WS-MINUTES            TO  S1-MINUTES
+           MOVE WS-SECONDS            TO  S1-SECONDS
+
+           MOVE WS-RECORDS-IN-SCRIPT  TO  S1-RECORDS-IN-SCRIPT
+           MOVE WS-RECORDS-PROCESSED  TO  S1-RECORDS-PROCESSED
+           MOVE WS-ABSTIME-ELAPSED    TO  S1-ABSTIME-ELAPSED
+           MOVE SCREEN-LINE-1         TO  S1-MESSAGE-1
+           IF B1-SCRIPT-ERROR
+              SET S1-SCRIPT-ERROR TO TRUE
+              MOVE B1-SCRIPT-SEQ  TO S1-SCRIPT-SEQ-ERROR
+           END-IF
+
+           MOVE WS-REGION         TO S1-REGION
+           MOVE WS-USERID         TO S1-USERID
+           MOVE EIBTRMID          TO S1-EIBTRMID
+           .
+
+       3000-10-ADD-1.
+           EXEC CICS WRITE
+                DATASET   ('BRGSTAT1')
+                FROM      (S1-RECORD)
+                LENGTH    (LENGTH OF S1-RECORD)
+                RIDFLD    (S1-KEY)
+                KEYLENGTH (LENGTH OF S1-KEY)
+                RESP      (WS-RESP)
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+               CONTINUE
+
+             WHEN WS-RESP = DFHRESP(DUPREC)
+               ADD 1  TO  S1-SECONDS
+               GO TO 3000-10-ADD-1
+
+             WHEN WS-RESP = DFHRESP(LENGERR)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to BRGSTAT1, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' key: ' DELIMITED BY SIZE
+                  S1-KEY DELIMITED BY SIZE
+                  ' record length error' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 3000-20-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(NOTOPEN)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file not open' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 3000-20-RETURN-TO-CICS
+
+             WHEN WS-RESP = DFHRESP(DISABLED)
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to VSAM, CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' file disabled' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 3000-20-RETURN-TO-CICS
+
+             WHEN OTHER
+               STRING WS-PREFIX-MSG DELIMITED BY SIZE
+                  'Insert to BRGSTAT1 CICS RC: '
+                              DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                  ' record not inserted' DELIMITED BY SIZE
+                                INTO MWTO-MSG-TEXT1
+               END-STRING
+               MOVE MWTO-MSG-TEXT1  TO SCREEN-LINE-1
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               PERFORM 9020-DISPLAY-SCREEN-MSG THRU 9020-EXIT
+               GO TO 3000-20-RETURN-TO-CICS
+           END-EVALUATE
+           .
+       3000-20-RETURN-TO-CICS.
+
+           EXEC CICS RETURN
+           END-EXEC
+
+           GOBACK
+           .
+       3000-EXIT.
+            EXIT.
+
+      *=====================================================
+       9000-WRITE-LOG.
+      *=====================================================
+
+           MOVE 100   TO MWTO-MSGLEN
+           SET  MWTO-CSMT-LOG-ONLY  TO TRUE
+
+           EXEC CICS LINK PROGRAM('MEDP995')
+                     COMMAREA(MWTO-COMMAREA)
+                     NOHANDLE
+           END-EXEC
+
+           MOVE SPACES    TO MWTO-MSG-TEXT1
+           .
+       9000-EXIT.
+            EXIT.
+
+      *=====================================================
+       9010-WRITE-TO-CONSOLE.
+      *=====================================================
+
+           EXEC CICS WRITEQ TD QUEUE('AMSG')
+                FROM   (WS-CONSOLE-MSG)
+                LENGTH (80)
+                RESP   (WS-RESP)
+                NOHANDLE
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+                  CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'WRITEQ TD error CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                               INTO WS-SCREEN-MSG
+               END-STRING
+               GO TO 9400-END-OF-TRANS
+
+           END-EVALUATE
+           .
+       9010-EXIT.
+            EXIT.
+
+      *=====================================================
+       9020-DISPLAY-SCREEN-MSG.
+      *=====================================================
+
+           EXEC CICS SEND TEXT FROM(SCREEN-TEXT)
+                LENGTH (LENGTH OF SCREEN-TEXT)
+                NOEDIT
+                CURSOR (9)
+                ERASE
+                FREEKB
+                RESP   (WS-RESP)
+                NOHANDLE
+           END-EXEC
+           MOVE WS-RESP TO WS-RESP-NUM
+
+           EVALUATE TRUE
+             WHEN WS-RESP = DFHRESP(NORMAL)
+                  CONTINUE
+
+             WHEN OTHER
+               STRING
+                  WS-PREFIX-MSG DELIMITED BY SIZE
+                  'SEND TEXT to screen error CICS RC: '
+                  DELIMITED BY SIZE
+                  WS-RESP-NUM DELIMITED BY SIZE
+                               INTO WS-SCREEN-MSG
+               END-STRING
+               PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+               GO TO 9999-RETURN-TO-CICS
+
+           END-EVALUATE
+           .
+       9020-EXIT.
+            EXIT.
+
+      *=====================================================
+       9070-GET-TIME.
+      *=====================================================
+
+           EXEC CICS ASKTIME
+                ABSTIME (WS-ABSTIME)
+           END-EXEC
+
+           EXEC CICS FORMATTIME
+                ABSTIME (WS-ABSTIME)
+                MMDDYYYY(WS-MMDDYYYY)
+                TIME    (WS-TIME-HHMMSS)
+                DATESEP ('/')
+                TIMESEP (':')
+           END-EXEC
+           .
+       9070-EXIT.
+            EXIT.
+
+      *=====================================================
+       9080-GET-UOW.
+      *=====================================================
+
+           EXEC CICS INQUIRE
+                TASK    (EIBTASKN)
+                UOW     (WS-UOW)
+                RESP    (WS-RESP)
+           END-EXEC
+
+           EXEC CICS ASSIGN
+                APPLID (WS-REGION)
+                SYSID  (WS-SYSID)
+                USERID (WS-USERID)
+                RESP   (WS-RESP)
+           END-EXEC
+
+      *-------------------------------------------------
+      *    convert text to hex from detail line data
+      *-------------------------------------------------
+
+           INITIALIZE  WS-CONV-ZONE
+                       WS-CONV-DIGT
+           MOVE 8  TO WS-TEXT-LENGTH
+           PERFORM VARYING WS-TXT-SUB FROM 1 BY 1
+                       UNTIL WS-TXT-SUB > WS-TEXT-LENGTH
+              MOVE WS-UOW (WS-TXT-SUB : 1) TO WS-CONV-BYTE
+              DIVIDE WS-CONV-NUM BY 16 GIVING WS-QUOTIENT
+                        REMAINDER WS-REMAINDER
+              MOVE WS-HEX-CHAR (WS-QUOTIENT + 1) TO
+                             WS-CONV-ZONE (WS-TXT-SUB:1)
+              MOVE WS-HEX-CHAR(WS-REMAINDER + 1) TO
+                     WS-CONV-DIGT (WS-TXT-SUB:1)
+           END-PERFORM
+
+           INITIALIZE WS-CONVERTED-TEXT
+           MOVE ZERO TO I J
+           PERFORM VARYING I FROM 1 BY 1
+                       UNTIL I > WS-TEXT-LENGTH
+              ADD 1   TO J
+              MOVE WS-CONV-ZONE (I:1) TO WS-CONVERTED-TEXT (J:1)
+              ADD 1   TO J
+              MOVE WS-CONV-DIGT (I:1) TO WS-CONVERTED-TEXT (J:1)
+           END-PERFORM
+
+           STRING
+             WS-PREFIX-MSG DELIMITED BY SIZE
+             'UOW ID : ' DELIMITED BY SIZE
+             WS-SYSID DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-REGION DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-TASKN DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-UOW DELIMITED BY SIZE
+             '-' DELIMITED BY SIZE
+             WS-CONVERTED-TEXT DELIMITED BY SPACE
+                      INTO MWTO-MSG-TEXT1
+           END-STRING
+           PERFORM 9000-WRITE-LOG THRU 9000-EXIT
+           .
+       9080-EXIT.
+            EXIT.
+
+      *=====================================================
+       9400-END-OF-TRANS.
+      *=====================================================
+
+           IF WS-SCREEN-MSG NOT = SPACES
+              EXEC CICS SEND TEXT FROM(WS-SCREEN-MSG)
+                   LENGTH(LENGTH OF WS-SCREEN-MSG)
+                   ERASE
+              END-EXEC
+           END-IF
+
+           GO TO 9999-RETURN-TO-CICS
+           .
+       9400-EXIT.
+            EXIT.
+
+      *=====================================================
+       9999-RETURN-TO-CICS.
+      *=====================================================
+
+      *------------------------------------------------------
+      *    write a statistic record
+      *------------------------------------------------------
+
+           PERFORM 3000-WRITE-BRGSTAT1 THRU 3000-EXIT
+
+           EXEC CICS RETURN
+           END-EXEC
+
+           GOBACK
+           .
+       9999-EXIT.
+            EXIT.
+
+      *=====================================================
+      *    END OF PROGRAM M20PEN10
+      *=====================================================
